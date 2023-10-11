@@ -1,5 +1,5 @@
 ---
-title: "Build_a_bootable_qcow2_image_with_debootstrap"
+title: "Build a bootable qcow2 image with debootstrap"
 date: 2023-10-12T00:03:10+08:00
 draft: false
 ---
