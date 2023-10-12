@@ -8,7 +8,7 @@ draft: false
 
 ## Create a empty image
 
-```bash
+```bash {linenos=table}
 qemu-img create -f qcow2 debian-buster.qcow2 60G
 ```
 
@@ -19,13 +19,13 @@ which does not actually consume 60GB of disk space).
 
 To begin, load the NBD (Network Block Device) kernel module.
 
-```bash
+```bash {linenos=table}
 modprobe nbd
 ```
 
 Mount the empty qcow2 image onto the NBD (Network Block Device) device.
 
-```bash
+```bash {linenos=table}
 qemu-nbd -c /dev/nbd0 debian-buster.qcow2
 ```
 
@@ -40,13 +40,13 @@ The next step is to partition the hard drive and install a Linux filesystem on i
 You have the flexibility to choose any tool you prefer for partitioning the hard drive. In this tutorial, we will use
 the `fdisk` tool.
 
-```bash
+```bash {linenos=table}
 fdisk /dev/nbd0
 ```
 
 In the interactive mode, please enter the following commands:
 
-```bash
+```bash {linenos=table}
 Command (m for help): o
 
 Created a new DOS disklabel with disk identifier 0x3267d9af.
@@ -84,13 +84,13 @@ w: write table to disk and exit
 
 Format the new created partition with ext4 filesystem.
 
-```bash
+```bash {linenos=table}
 mkfs.ext4 /dev/nbd0p1
 ```
 
 Output
 
-```bash
+```bash {linenos=table}
 mke2fs 1.43.4 (31-Jan-2017)
 Discarding device blocks: failed - Input/output error
 Creating filesystem with 15728384 4k blocks and 3932160 inodes
@@ -107,14 +107,14 @@ Writing superblocks and filesystem accounting information: done
 
 ## Mount partition
 
-```bash
+```bash {linenos=table}
 mkdir mnt
 mount /dev/nbd0p1 $PWD/mnt/
 ```
 
 ## Use debootstrap to build debian(buster) root filesystem
 
-```bash
+```bash {linenos=table}
 debootstrap buster $PWD/mnt https://mirrors.tuna.tsinghua.edu.cn/debian/
 ```
 
@@ -123,7 +123,7 @@ don’t need.
 
 ## Mount  proc and device
 
-```bash
+```bash {linenos=table}
 mount -o bind /dev "$PWD/mnt/dev"
 mount -o bind /dev/pts "$PWD/mnt/dev/pts"
 mount -t proc none "${PWD}/mnt/proc"
@@ -132,38 +132,21 @@ mount -t sysfs none "${PWD}/mnt/sys"
 
 ## Chroot
 
-```bash
+```bash {linenos=table}
 chroot $PWD/mnt 
 ```
 
 ## Configure apt mirror(optional)
 
-```bash
+```bash {linenos=table}
 cat > / etc / apt / sources.list << EOF
-deb
-https://mirrors.tuna.tsinghua.edu.cn/debian/ buster main contrib non-free
-    #
-deb - src
-https://mirrors.tuna.tsinghua.edu.cn/debian/ buster main contrib non-free
+deb https://mirrors.tuna.tsinghua.edu.cn/debian/ buster main contrib non-free
 
-    deb
-https://mirrors.tuna.tsinghua.edu.cn/debian/ buster-updates main contrib non-free
-    #
-deb - src
-https://mirrors.tuna.tsinghua.edu.cn/debian/ buster-updates main contrib non-free
+deb https://mirrors.tuna.tsinghua.edu.cn/debian/ buster-updates main contrib non-free
 
-    deb
-https://mirrors.tuna.tsinghua.edu.cn/debian/ buster-backports main contrib non-free
-    #
-deb - src
-https://mirrors.tuna.tsinghua.edu.cn/debian/ buster-backports main contrib non-free
+deb https://mirrors.tuna.tsinghua.edu.cn/debian/ buster-backports main contrib non-free
 
-    deb
-https://mirrors.tuna.tsinghua.edu.cn/debian-security buster/updates main contrib non-free
-    #
-deb - src
-https://mirrors.tuna.tsinghua.edu.cn/debian-security buster/updates main contrib non-free
-    EOF
+deb https://mirrors.tuna.tsinghua.edu.cn/debian-security buster/updates main contrib non-free
 ```
 
 ## Install kernel
@@ -171,7 +154,7 @@ https://mirrors.tuna.tsinghua.edu.cn/debian-security buster/updates main contrib
 Debootstrap is a tool used to create a Debian root filesystem without including the kernel. After using debootstrap, you
 will need to manually install the kernel using the apt package manager.
 
-```bash
+```bash {linenos=table}
 apt update
 apt install -y linux-image-amd64
 ```
@@ -180,19 +163,19 @@ apt install -y linux-image-amd64
 
 Get UUID of hard drive.
 
-```bash
+```bash {linenos=table}
 blkid |grep '^/dev/nbd0p1'|grep -o ' UUID="[^"]\+"'|sed -e 's/^ //'
 ```
 
 Output(UUID might be different on your disk)
 
-```bash
+```bash {linenos=table}
 UUID="f5bfdfcd-2074-498a-b4c5-42a9a29b30be"
 ```
 
 Write to fstab
 
-```bash
+```bash {linenos=table}
 cat >/etc/fstab <<EOF
 UUID="f5bfdfcd-2074-498a-b4c5-42a9a29b30be" / ext4 defaults 0 1
 EOF
@@ -200,14 +183,14 @@ EOF
 
 ## Install bootloader(grub)
 
-```bash
+```bash {linenos=table}
 apt install -y grub2
 
 ```
 
 ## Configure grub(optional)
 
-```bash
+```bash {linenos=table}
 # Print grub log in tty when boot.
 sed -i 's/GRUB_CMDLINE_LINUX=\"/GRUB_CMDLINE_LINUX=\"console=tty0 console=ttyS0,115200 noibrs noibpb nopti nospectre_v2 nospectre_v1 l1tf=off nospec_store_bypass_disable no_stf_barrier mds=off tsx=on tsx_async_abort=off mitigations=off /g' /etc/default/grub
 sed -i 's/GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/g' /etc/default/grub
@@ -215,7 +198,7 @@ sed -i 's/GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/g' /etc/default/grub
 
 Install grub onto for disk.
 
-```bash
+```bash {linenos=table}
 # Remove os-prober config, don't need to detect other os on the machine. Or the host boot config will write to grub config, it's not useful.
 rm -f /etc/grub.d/*os-prober
 grub-install --no-floppy "/dev/nbd0"
@@ -232,14 +215,14 @@ In this environment, it’s better to install necessary software or config such 
 - hostname, timezome;
 - etc.
 
-```bash
+```bash {linenos=table}
 # Change root password.
 passwd root
 ```
 
 ## Unmount and clean
 
-```bash
+```bash {linenos=table}
 exit
 rm -rf "${PWD}/mnt/tmp/*"
 umount "$PWD/mnt/dev/pts"
@@ -258,7 +241,7 @@ qemu-nbd --disconnect "/dev/nbd0"
 
 ## Start vm
 
-```bash
+```bash {linenos=table}
 qemu-system-x86_64 --enable-kvm --nodefaults --nographic -display none -machine type=pc,usb=off -smp 6,sockets=1,cores=6,threads=1 -m 2024M -device virtio-balloon-pci,id=balloon0 -device virtio-blk-pci,drive=drive0,serial=d547d26900a8e36b0198 -drive file=debian-buster.qcow2,format=qcow2,id=drive0,if=none,aio=threads,media=disk,cache=unsafe,snapshot=on -chardev socket,id=serial0,path=/tmp/console.sock,server=on,wait=off -serial chardev:serial0 -vnc unix:/tmp/vnc.sock -device VGA,id=vga,vgamem_mb=64
 ```
 
@@ -266,7 +249,7 @@ In this example, KVM is enabled. If you cannot use KVM, remove `--enable-kvm` fr
 
 ## Connect VM by console
 
-```bash
+```bash {linenos=table}
 apt install -y minicom
 minicom -D unix#/tmp/consol
 ```
