@@ -14,3 +14,7 @@ name = "Blog website for cox96de"
 
 [params.app]
 title = "Blog website for cox96de"
+
+[markup]
+[markup.highlight]
+lineNos = true

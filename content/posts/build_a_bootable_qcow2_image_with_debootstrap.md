@@ -8,31 +8,34 @@ draft: false
 
 ## Create a empty image
 
-```bash {linenos=table}
+```bash
 qemu-img create -f qcow2 debian-buster.qcow2 60G
 ```
 
-This command creates a debian-buster.qcow2 image file in the qcow2 format, with a maximum storage capacity of 60GB (
+This command creates a `debian-buster.qcow2` image file in the qcow2 format, with a maximum storage capacity of 60GB (
 which does not actually consume 60GB of disk space).
+
+💡 Most of the commands listed below require root privileges.
 
 ## Mount the image as a device
 
 To begin, load the NBD (Network Block Device) kernel module.
 
-```bash {linenos=table}
+```bash
 modprobe nbd
 ```
 
 Mount the empty qcow2 image onto the NBD (Network Block Device) device.
 
-```bash {linenos=table}
+```bash
 qemu-nbd -c /dev/nbd0 debian-buster.qcow2
 ```
 
-We will attempt to mount the image using /dev/nbd0, but if this device is unavailable or being used by another process,
-we will try another device such as /dev/nbd1 until we find an available one.
+We will attempt to mount the image using `/dev/nbd0`, but if this device is unavailable or being used by another
+process,
+we will try another device such as `/dev/nbd1` until we find an available one.
 
-Once mounted, you can treat the qcow2 image as a hard drive device, specifically /dev/nbd0. It is an empty hard drive.
+Once mounted, you can treat the qcow2 image as a hard drive device, specifically `/dev/nb`. It is an empty hard drive.
 The next step is to partition the hard drive and install a Linux filesystem on it.
 
 ## Partition
@@ -40,13 +43,13 @@ The next step is to partition the hard drive and install a Linux filesystem on i
 You have the flexibility to choose any tool you prefer for partitioning the hard drive. In this tutorial, we will use
 the `fdisk` tool.
 
-```bash {linenos=table}
+```bash
 fdisk /dev/nbd0
 ```
 
 In the interactive mode, please enter the following commands:
 
-```bash {linenos=table}
+```bash
 Command (m for help): o
 
 Created a new DOS disklabel with disk identifier 0x3267d9af.
@@ -80,17 +83,37 @@ a: toggle a bootable flag
 
 w: write table to disk and exit
 
+Or you can use single shell command to do this.
+
+```bash
+echo -e "o\nn\np\n1\n\n\na\nw\n" | fdisk /dev/nbd0
+```
+
+Use `fdisk -l /dev/nbd0` to view the partition result.
+
+```bash
+Disk /dev/nbd0: 60 GiB, 64424509440 bytes, 125829120 sectors
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disklabel type: dos
+Disk identifier: 0xfd48ea90
+
+Device      Boot Start       End   Sectors Size Id Type
+/dev/nbd0p1 *     2048 125829119 125827072  60G 83 Linux
+```
+
 ## Make filesystem
 
 Format the new created partition with ext4 filesystem.
 
-```bash {linenos=table}
+```bash
 mkfs.ext4 /dev/nbd0p1
 ```
 
 Output
 
-```bash {linenos=table}
+```bash
 mke2fs 1.43.4 (31-Jan-2017)
 Discarding device blocks: failed - Input/output error
 Creating filesystem with 15728384 4k blocks and 3932160 inodes
@@ -107,39 +130,42 @@ Writing superblocks and filesystem accounting information: done
 
 ## Mount partition
 
-```bash {linenos=table}
+```bash
 mkdir mnt
 mount /dev/nbd0p1 $PWD/mnt/
 ```
 
 ## Use debootstrap to build debian(buster) root filesystem
 
-```bash {linenos=table}
+```bash
+apt install -y debootstrap
 debootstrap buster $PWD/mnt https://mirrors.tuna.tsinghua.edu.cn/debian/
 ```
 
 I uses a mirror(`https://mirrors.tuna.tsinghua.edu.cn/debian/`) to download debian software. You can omit this if you
 don’t need.
 
-## Mount  proc and device
+## Mount proc and device
 
-```bash {linenos=table}
+```bash
 mount -o bind /dev "$PWD/mnt/dev"
 mount -o bind /dev/pts "$PWD/mnt/dev/pts"
 mount -t proc none "${PWD}/mnt/proc"
 mount -t sysfs none "${PWD}/mnt/sys"
 ```
 
+You can bind more directory if you need such as `/sys/fs/cgroup`
+
 ## Chroot
 
-```bash {linenos=table}
-chroot $PWD/mnt 
+```bash
+chroot $PWD/mnt bash
 ```
 
 ## Configure apt mirror(optional)
 
-```bash {linenos=table}
-cat > / etc / apt / sources.list << EOF
+```bash
+cat > /etc/apt/sources.list << EOF
 deb https://mirrors.tuna.tsinghua.edu.cn/debian/ buster main contrib non-free
 
 deb https://mirrors.tuna.tsinghua.edu.cn/debian/ buster-updates main contrib non-free
@@ -147,58 +173,71 @@ deb https://mirrors.tuna.tsinghua.edu.cn/debian/ buster-updates main contrib non
 deb https://mirrors.tuna.tsinghua.edu.cn/debian/ buster-backports main contrib non-free
 
 deb https://mirrors.tuna.tsinghua.edu.cn/debian-security buster/updates main contrib non-free
+EOF
 ```
+
+Configure apt mirror to make `apt install` faster.
 
 ## Install kernel
 
 Debootstrap is a tool used to create a Debian root filesystem without including the kernel. After using debootstrap, you
 will need to manually install the kernel using the apt package manager.
 
-```bash {linenos=table}
+```bash
 apt update
 apt install -y linux-image-amd64
 ```
+
+You can install other version’s kernel by apt. Use `apt search linux-image` to search more kernel image.
 
 ## configure fstab
 
 Get UUID of hard drive.
 
-```bash {linenos=table}
-blkid |grep '^/dev/nbd0p1'|grep -o ' UUID="[^"]\+"'|sed -e 's/^ //'
+```bash
+UUID=$(blkid |grep '^/dev/nbd0p1'|grep -o ' UUID="[^"]\+"'|sed -e 's/^ //')
+echo $UUID
 ```
 
 Output(UUID might be different on your disk)
 
-```bash {linenos=table}
+```bash
 UUID="f5bfdfcd-2074-498a-b4c5-42a9a29b30be"
 ```
 
 Write to fstab
 
-```bash {linenos=table}
+```bash
 cat >/etc/fstab <<EOF
-UUID="f5bfdfcd-2074-498a-b4c5-42a9a29b30be" / ext4 defaults 0 1
+${UUID} / ext4 defaults 0 1
 EOF
 ```
 
 ## Install bootloader(grub)
 
-```bash {linenos=table}
+```bash
 apt install -y grub2
-
 ```
 
 ## Configure grub(optional)
 
-```bash {linenos=table}
+```bash
 # Print grub log in tty when boot.
-sed -i 's/GRUB_CMDLINE_LINUX=\"/GRUB_CMDLINE_LINUX=\"console=tty0 console=ttyS0,115200 noibrs noibpb nopti nospectre_v2 nospectre_v1 l1tf=off nospec_store_bypass_disable no_stf_barrier mds=off tsx=on tsx_async_abort=off mitigations=off /g' /etc/default/grub
+sed -i 's/GRUB_CMDLINE_LINUX=\"/GRUB_CMDLINE_LINUX=\"console=tty0 console=ttyS0,115200 /g' /etc/default/grub
 sed -i 's/GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/g' /etc/default/grub
+# Disable graphic reqirement.
+sed -i 's/^#GRUB_TERMINAL=console$/GRUB_TERMINAL=console/' /etc/default/grub
 ```
 
-Install grub onto for disk.
+Uncomment `GRUB_TERMINAL=console` to disable graphic requirement. Or you must pass video device in qemu (
+such `-device VGA`)
 
-```bash {linenos=table}
+If you want to make boot faster, you can disable more feature in `GRUB_CMDLINE_LINUX` such
+as `GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0,115200 noibrs noibpb nopti nospectre_v2 nospectre_v1 l1tf=off nospec_store_bypass_disable no_stf_barrier mds=off tsx=on tsx_async_abort=off mitigations=off"`
+
+## Install grub onto for disk.
+
+```bash
 # Remove os-prober config, don't need to detect other os on the machine. Or the host boot config will write to grub config, it's not useful.
 rm -f /etc/grub.d/*os-prober
 grub-install --no-floppy "/dev/nbd0"
@@ -215,24 +254,27 @@ In this environment, it’s better to install necessary software or config such 
 - hostname, timezome;
 - etc.
 
-```bash {linenos=table}
+```bash
 # Change root password.
 passwd root
+
 ```
 
 ## Unmount and clean
 
-```bash {linenos=table}
+```bash
+# exit from chroot
 exit
 rm -rf "${PWD}/mnt/tmp/*"
 umount "$PWD/mnt/dev/pts"
 umount "$PWD/mnt/dev"
 umount "${PWD}/mnt/proc"
-umount "${PWD}/mnt/sys" 
+umount "${PWD}/mnt/sys"
 fstrim -v "$PWD/mnt"
 umount "$PWD/mnt"
 e2fsck -p -f "/dev/nbd0p1"
 qemu-nbd --disconnect "/dev/nbd0"
+
 ```
 
 ## Output final image
@@ -241,15 +283,14 @@ qemu-nbd --disconnect "/dev/nbd0"
 
 ## Start vm
 
-```bash {linenos=table}
+```bash
 qemu-system-x86_64 --enable-kvm --nodefaults --nographic -display none -machine type=pc,usb=off -smp 6,sockets=1,cores=6,threads=1 -m 2024M -device virtio-balloon-pci,id=balloon0 -device virtio-blk-pci,drive=drive0,serial=d547d26900a8e36b0198 -drive file=debian-buster.qcow2,format=qcow2,id=drive0,if=none,aio=threads,media=disk,cache=unsafe,snapshot=on -chardev socket,id=serial0,path=/tmp/console.sock,server=on,wait=off -serial chardev:serial0 -vnc unix:/tmp/vnc.sock -device VGA,id=vga,vgamem_mb=64
-```
 
-In this example, KVM is enabled. If you cannot use KVM, remove `--enable-kvm` from the command.
+```
 
 ## Connect VM by console
 
-```bash {linenos=table}
+```bash
 apt install -y minicom
-minicom -D unix#/tmp/consol
+minicom -D unix#/tmp/console.sock
 ```
